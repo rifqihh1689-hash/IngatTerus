@@ -129,3 +129,28 @@ describe('duplikat & ekspor', () => {
     expect(r.cards.map(({ front, back }) => ({ front, back }))).toEqual(cards)
   })
 })
+
+describe('teks hasil AI', () => {
+  it('hanya mengambil isi blok kode pertama; nomor baris tetap sesuai teks asli', () => {
+    const ai = [
+      'Berikut flashcard-nya:',
+      '',
+      '```text',
+      'Apa itu ATP?;Pembawa **energi** sel',
+      'Apa beda DNA dan RNA?;**DNA**: deoksiribosa\\n**RNA**: ribosa',
+      '```',
+      '',
+      'CATATAN: bagian 3 dilewati karena ambigu.',
+    ].join('\n')
+    const r = parseCardText(ai)
+    expect(r.errors).toEqual([])
+    expect(r.cards.map((c) => c.line)).toEqual([4, 5])
+    expect(r.cards[1].back).toBe('**DNA**: deoksiribosa\n**RNA**: ribosa')
+  })
+
+  it('blok kode tanpa penutup tetap terbaca; teks tanpa blok kode tidak berubah', async () => {
+    const { keepFirstCodeBlock } = await import('./importText')
+    expect(parseCardText('```\na;b\nc;d').cards).toHaveLength(2)
+    expect(keepFirstCodeBlock('a;b\nc;d')).toBe('a;b\nc;d')
+  })
+})

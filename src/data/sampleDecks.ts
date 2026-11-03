@@ -133,13 +133,14 @@ export async function seedSampleDecks(database: IngatDB = defaultDb, onlyMissing
   let added = 0
   for (const sample of SAMPLE_DECKS) {
     if (onlyMissing && existing.has(sample.key)) continue
+    // id tetap (deterministik) agar deck contoh tidak terduplikasi saat sinkron antar perangkat
     const deckId = await createDeck(
-      { name: sample.name, description: sample.description, color: sample.color, sample: sample.key },
+      { id: `sample-${sample.key}`, name: sample.name, description: sample.description, color: sample.color, sample: sample.key },
       database,
     )
     await addCards(
       deckId,
-      sample.cards.map(([front, back]) => ({ front, back })),
+      sample.cards.map(([front, back], i) => ({ id: `sample-${sample.key}-${i + 1}`, front, back })),
       database,
     )
     added++

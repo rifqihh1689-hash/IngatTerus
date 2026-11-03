@@ -69,3 +69,10 @@ export const IconTarget = (p: IconProps) =>
   base(p, <><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1" /></>)
 export const IconFile = (p: IconProps) =>
   base(p, <><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" /><path d="M14 3v6h6" /></>)
+export const IconCloud = (p: IconProps) => base(p, <path d="M17.5 19a4.5 4.5 0 1 0-1.4-8.78A6 6 0 0 0 4.5 12.5 3.5 3.5 0 0 0 6 19z" />)
+export const IconCloudOff = (p: IconProps) =>
+  base(p, <><path d="m2 2 20 20" /><path d="M5.8 8.1A6 6 0 0 0 4.5 12.5 3.5 3.5 0 0 0 6 19h11.5c.6 0 1.2-.1 1.7-.3" /><path d="M21.5 15.7A4.5 4.5 0 0 0 16 10.3a6 6 0 0 0-6.4-3.9" /></>)
+export const IconSync = (p: IconProps) =>
+  base(p, <><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16" /><path d="M3 21v-5h5" /><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8" /><path d="M21 3v5h-5" /></>)
+export const IconLogout = (p: IconProps) =>
+  base(p, <><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="m16 17 5-5-5-5" /><path d="M21 12H9" /></>)

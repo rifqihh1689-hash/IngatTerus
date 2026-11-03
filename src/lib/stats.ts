@@ -1,6 +1,6 @@
 /** Perhitungan statistik belajar (fungsi murni). */
 import { dayKey, endOfDay, shiftDayKey, DAY_MS, startOfDay } from './date'
-import { retrievability } from './fsrs'
+import { DEFAULT_W, retrievability } from './fsrs'
 import type { Card, ReviewLog } from '../types'
 
 export interface Streak {
@@ -102,10 +102,19 @@ export function cardMaturity(cards: readonly Pick<Card, 'state' | 'scheduledDays
 }
 
 /** Rata-rata peluang ingat kartu yang sudah dipelajari saat ini (0–1) atau null. */
-export function averageRetrievability(cards: readonly Card[], now: number = Date.now()): number | null {
+export function averageRetrievability(cards: readonly Card[], now: number = Date.now(), w: readonly number[] = DEFAULT_W): number | null {
   const studied = cards.filter((c) => c.state !== 'new' && c.lastReview != null)
   if (studied.length === 0) return null
-  return studied.reduce((sum, c) => sum + retrievability(c, now), 0) / studied.length
+  return studied.reduce((sum, c) => sum + retrievability(c, now, w), 0) / studied.length
+}
+
+/** Format durasi belajar, mis. "45 dtk", "12 mnt", "1 j 20 m". */
+export function formatStudyTime(ms: number): string {
+  const sec = Math.round(ms / 1000)
+  if (sec < 60) return `${sec} dtk`
+  const min = Math.round(sec / 60)
+  if (min < 60) return `${min} mnt`
+  return `${Math.floor(min / 60)} j ${min % 60} m`
 }
 
 export function formatPercent(x: number | null, digits = 0): string {

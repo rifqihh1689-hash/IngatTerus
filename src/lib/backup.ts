@@ -108,6 +108,7 @@ export function parseBackup(json: string, now: number = Date.now()): ParsedBacku
       ...(optStr(c.backImage) ? { backImage: optStr(c.backImage) } : {}),
       createdAt: num(c.createdAt, now),
       updatedAt: num(c.updatedAt, now),
+      ...(typeof c.resetAt === 'number' ? { resetAt: c.resetAt } : {}),
       state,
       due: num(c.due, base.due),
       stability: num(c.stability, 0),
@@ -139,6 +140,9 @@ export function parseBackup(json: string, now: number = Date.now()): ParsedBacku
       day: str(l.day) || dayKey(reviewedAt),
       elapsedDays: num(l.elapsedDays, 0),
       scheduledDays: num(l.scheduledDays, 0),
+      ...(typeof l.durationMs === 'number' && l.durationMs > 0 ? { durationMs: l.durationMs } : {}),
+      ...(isObj(l.before) && typeof l.before.reps === 'number' ? { before: { reps: l.before.reps, lastReview: typeof l.before.lastReview === 'number' ? l.before.lastReview : null } } : {}),
+      ...(isObj(l.after) && STATES.includes(l.after.state as CardState) && typeof l.after.due === 'number' ? { after: l.after as unknown as ReviewLog['after'] } : {}),
     })
   }
 

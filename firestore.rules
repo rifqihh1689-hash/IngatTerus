@@ -1,0 +1,17 @@
+rules_version = '2';
+
+// Aturan keamanan Firestore untuk sinkron IngatTerus.
+// Setiap pengguna hanya bisa membaca & menulis datanya sendiri di users/{uid}/records.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId}/records/{recordId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow create, update: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.data.keys().hasOnly(['t', 'i', 'd', 'del', 's'])
+        && request.resource.data.t in ['decks', 'cards', 'reviewLogs', 'quizResults', 'settings']
+        && recordId == request.resource.data.t + ':' + request.resource.data.i
+        && request.resource.data.s == request.time;
+    }
+  }
+}

@@ -243,3 +243,54 @@ describe('pengingat', () => {
     expect(reminderMessage(0, 0).title).toBe('Waktunya belajar! 📚')
   })
 })
+
+describe('fitur belajar tambahan', () => {
+  const now = new Date(2026, 2, 10, 9).getTime()
+  const mk = (id: string, over: Partial<Card>): Card => ({
+    id,
+    deckId: 'd',
+    front: id,
+    back: id,
+    createdAt: 0,
+    updatedAt: 0,
+    ...newSchedule(now),
+    ...over,
+  })
+
+  it('round-robin menyelang-nyeling kartu baru antar deck', async () => {
+    const { roundRobin } = await import('./queue')
+    expect(roundRobin([['a1', 'a2', 'a3'], ['b1'], ['c1', 'c2']])).toEqual(['a1', 'b1', 'c1', 'a2', 'c2', 'a3'])
+    expect(roundRobin([])).toEqual([])
+  })
+
+  it('latihan tambahan memilih kartu belum jatuh tempo dengan peluang ingat terendah', async () => {
+    const { buildExtraQueue } = await import('./queue')
+    const cards = [
+      // terakhir diulang 20 hari lalu, S=10 → R rendah
+      mk('rawan', { state: 'review', stability: 10, difficulty: 5, lastReview: now - 20 * DAY_MS, due: now + 2 * DAY_MS }),
+      // baru diulang kemarin, S=30 → R tinggi
+      mk('aman', { state: 'review', stability: 30, difficulty: 5, lastReview: now - DAY_MS, due: now + 29 * DAY_MS }),
+      mk('sedang', { state: 'review', stability: 10, difficulty: 5, lastReview: now - 5 * DAY_MS, due: now + 5 * DAY_MS }),
+      // jatuh tempo hari ini → masuk antrean biasa, bukan latihan tambahan
+      mk('jatuh-tempo', { state: 'review', stability: 5, difficulty: 5, lastReview: now - 6 * DAY_MS, due: now - DAY_MS }),
+      mk('baru', {}),
+    ]
+    expect(buildExtraQueue(cards, now).map((c) => c.id)).toEqual(['rawan', 'sedang', 'aman'])
+    expect(buildExtraQueue(cards, now, 1).map((c) => c.id)).toEqual(['rawan'])
+  })
+
+  it('kartu leech ditandai setelah 8 kali lupa', async () => {
+    const { isLeech } = await import('./queue')
+    expect(isLeech({ lapses: 7 })).toBe(false)
+    expect(isLeech({ lapses: 8 })).toBe(true)
+  })
+})
+
+describe('format waktu belajar', () => {
+  it('detik, menit, dan jam', async () => {
+    const { formatStudyTime } = await import('./stats')
+    expect(formatStudyTime(42_000)).toBe('42 dtk')
+    expect(formatStudyTime(12 * 60_000)).toBe('12 mnt')
+    expect(formatStudyTime(80 * 60_000)).toBe('1 j 20 m')
+  })
+})

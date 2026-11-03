@@ -64,8 +64,8 @@ describe('repositori data', () => {
     const deckId = await createDeck({ name: 'A' }, db)
     const cardId = await addCard(deckId, { front: 'q', back: 'a' }, db)
     const { card } = await answerCard(cardId, Rating.Mudah, Date.now(), db)
-    // S0(Mudah)=15,69 → dengan retensi 80% interval jauh lebih panjang dari 16 hari
-    expect(card.scheduledDays).toBeGreaterThan(30)
+    // S0(Mudah)=8,3 hari → dengan target retensi 80% interval jauh lebih panjang (±27 hari)
+    expect(card.scheduledDays).toBeGreaterThan(20)
   })
 
   it('mengedit kartu dapat menghapus gambar', async () => {
@@ -149,5 +149,55 @@ describe('deck contoh', () => {
         expect(toPlainText(front)).not.toMatch(/\*\*|\^|~/)
         expect(toPlainText(back)).not.toMatch(/\*\*|\^|~/)
       }
+  })
+})
+
+describe('parameter pribadi FSRS-6', () => {
+  it('jawaban memakai parameter pribadi dari pengaturan', async () => {
+    const { DEFAULT_W } = await import('../lib/fsrs')
+    const custom = [...DEFAULT_W]
+    custom[3] = 30 // stabilitas awal "Mudah"
+    await setSetting('fsrsParams', custom, db)
+    const deckId = await createDeck({ name: 'A' }, db)
+    const cardId = await addCard(deckId, { front: 'q', back: 'a' }, db)
+    const { card } = await answerCard(cardId, Rating.Mudah, Date.now(), db)
+    expect(card.stability).toBeCloseTo(30)
+    expect(card.scheduledDays).toBeGreaterThanOrEqual(26) // 30 hari ± fuzz
+    expect(card.scheduledDays).toBeLessThanOrEqual(34)
+  })
+
+  it('parameter rusak di pengaturan diabaikan (kembali ke bawaan)', async () => {
+    await setSetting('fsrsParams', [1, 2, 3], db)
+    const deckId = await createDeck({ name: 'A' }, db)
+    const cardId = await addCard(deckId, { front: 'q', back: 'a' }, db)
+    const { card } = await answerCard(cardId, Rating.Mudah, Date.now(), db)
+    expect(card.stability).toBeCloseTo(8.2956)
+  })
+
+  it('mencatat lama berpikir & menghitung ulang memori dari riwayat', async () => {
+    const { recomputeMemoryStates } = await import('./repo')
+    const { DEFAULT_W } = await import('../lib/fsrs')
+    const deckId = await createDeck({ name: 'A' }, db)
+    const cardId = await addCard(deckId, { front: 'q', back: 'a' }, db)
+    const t0 = new Date(2026, 0, 5, 9).getTime()
+    await answerCard(cardId, Rating.Bisa, t0, db, 4200)
+    await answerCard(cardId, Rating.Bisa, t0 + 10 * 60_000, db)
+    await answerCard(cardId, Rating.Bisa, t0 + 3 * 86_400_000, db)
+    const before = await db.cards.get(cardId)
+    const logs = await db.reviewLogs.orderBy('reviewedAt').toArray()
+    expect(logs[0].durationMs).toBe(4200)
+    expect(logs[1].durationMs).toBeUndefined()
+    // dengan parameter yang sama, hasil putar ulang identik
+    expect(await recomputeMemoryStates(DEFAULT_W, db)).toBe(1)
+    const after = await db.cards.get(cardId)
+    expect(after?.stability).toBeCloseTo(before!.stability, 8)
+    expect(after?.due).toBe(before?.due)
+    // parameter berbeda → stabilitas berubah, jatuh tempo tetap
+    const w = [...DEFAULT_W]
+    w[2] = 10
+    await recomputeMemoryStates(w, db)
+    const changed = await db.cards.get(cardId)
+    expect(changed?.stability).toBeGreaterThan(before!.stability)
+    expect(changed?.due).toBe(before?.due)
   })
 })

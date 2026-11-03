@@ -30,7 +30,15 @@ export interface Schedule {
   scheduledDays: number
 }
 
-export interface Deck {
+/** Penanda sinkron lokal (tidak pernah dikirim ke cloud). */
+export interface SyncMeta {
+  /** 1 = ada perubahan lokal yang belum dikirim. */
+  _dirty?: number
+  /** Waktu modifikasi lokal terakhir (untuk mendeteksi perubahan saat pengiriman). */
+  _mtime?: number
+}
+
+export interface Deck extends SyncMeta {
   id: string
   name: string
   description: string
@@ -42,7 +50,7 @@ export interface Deck {
   sample?: string
 }
 
-export interface Card extends Schedule {
+export interface Card extends Schedule, SyncMeta {
   id: string
   deckId: string
   front: string
@@ -53,9 +61,11 @@ export interface Card extends Schedule {
   backImage?: string
   createdAt: number
   updatedAt: number
+  /** Waktu kemajuan kartu diatur ulang; riwayat sebelum ini diabaikan saat menghitung jadwal. */
+  resetAt?: number
 }
 
-export interface ReviewLog {
+export interface ReviewLog extends SyncMeta {
   id: string
   cardId: string
   deckId: string
@@ -67,11 +77,17 @@ export interface ReviewLog {
   day: string
   elapsedDays: number
   scheduledDays: number
+  /** Lama berpikir sebelum menjawab (ms) – opsional. */
+  durationMs?: number
+  /** Sidik kartu sebelum dijawab (untuk memutar ulang riwayat saat sinkron). */
+  before?: { reps: number; lastReview: number | null }
+  /** Jadwal hasil jawaban ini persis seperti dihitung perangkat yang menjawab. */
+  after?: Schedule
 }
 
 export type QuizMode = 'kuis' | 'ujian'
 
-export interface QuizResult {
+export interface QuizResult extends SyncMeta {
   id: string
   deckId: string
   mode: QuizMode
@@ -82,9 +98,20 @@ export interface QuizResult {
   day: string
 }
 
-export interface SettingRow {
+export interface SettingRow extends SyncMeta {
   key: string
   value: unknown
+  updatedAt?: number
+}
+
+/** Catatan penghapusan agar ikut terhapus di perangkat lain. */
+export interface Tombstone {
+  /** `${table}:${id}` */
+  key: string
+  table: 'decks' | 'cards' | 'reviewLogs' | 'quizResults' | 'settings'
+  id: string
+  deletedAt: number
+  _dirty?: number
 }
 
 export interface AppSettings {
@@ -95,6 +122,18 @@ export interface AppSettings {
   reminderTime: string
   lastReminderDay: string | null
   seeded: boolean
+  onboarded: boolean
+  /** Parameter FSRS-6 hasil optimasi pribadi; null = bawaan. */
+  fsrsParams: number[] | null
+  optimizedAt: number | null
+  optimizedReviews: number
+  optimizedLossBefore: number | null
+  optimizedLossAfter: number | null
+  /** Akun cloud yang terhubung di perangkat ini (khusus perangkat). */
+  syncUid: string | null
+  /** Waktu server terakhir yang sudah ditarik dari cloud (ms). */
+  syncCursor: number
+  lastSyncAt: number | null
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -105,4 +144,13 @@ export const DEFAULT_SETTINGS: AppSettings = {
   reminderTime: '19:00',
   lastReminderDay: null,
   seeded: false,
+  onboarded: false,
+  fsrsParams: null,
+  optimizedAt: null,
+  optimizedReviews: 0,
+  optimizedLossBefore: null,
+  optimizedLossAfter: null,
+  syncUid: null,
+  syncCursor: 0,
+  lastSyncAt: null,
 }

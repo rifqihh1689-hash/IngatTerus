@@ -15,6 +15,8 @@ import { NotFoundPage } from './pages/NotFoundPage'
 import { db, getSettings } from './db/db'
 import { seedSampleDecks } from './data/sampleDecks'
 import { checkReminderNow } from './lib/notify'
+import { initSync } from './sync/manager'
+import { SyncChoiceDialog } from './components/SyncSection'
 
 interface Route {
   pattern: string
@@ -27,11 +29,11 @@ const ROUTES: Route[] = [
   { pattern: '/deck/:id', render: (p) => <DeckPage deckId={p.id} /> },
   { pattern: '/deck/:id/kartu-baru', render: (p) => <CardEditorPage deckId={p.id} /> },
   { pattern: '/kartu/:id', render: (p) => <CardEditorPage cardId={p.id} /> },
-  { pattern: '/belajar/:id', focus: true, render: (p) => <StudyPage deckId={p.id} /> },
+  { pattern: '/belajar/:id', focus: true, render: (p, q) => <StudyPage deckId={p.id} extra={q.get('mode') === 'ekstra'} /> },
   { pattern: '/kuis/:id', focus: true, render: (p) => <QuizPage deckId={p.id} /> },
   { pattern: '/ujian/:id', focus: true, render: (p) => <ExamPage deckId={p.id} /> },
   { pattern: '/statistik', render: () => <StatsPage /> },
-  { pattern: '/impor', render: (_p, q) => <ImportPage initialDeckId={q.get('deck') ?? undefined} /> },
+  { pattern: '/impor', render: (_p, q) => <ImportPage initialDeckId={q.get('deck') ?? undefined} initialTab={q.get('tab') ?? (q.get('deck') ? 'tempel' : undefined)} /> },
   { pattern: '/pengaturan', render: () => <SettingsPage /> },
 ]
 
@@ -61,10 +63,17 @@ function useReminderLoop() {
   }, [])
 }
 
+let syncStarted = false
+
 export default function App() {
   const { path, query } = useLocation()
   useFirstRunSeed()
   useReminderLoop()
+  useEffect(() => {
+    if (syncStarted) return
+    syncStarted = true
+    void initSync()
+  }, [])
 
   let content: ReactNode = <NotFoundPage />
   let focus = false
@@ -84,6 +93,7 @@ export default function App() {
           {content}
         </div>
       </Layout>
+      <SyncChoiceDialog />
       <GlobalOverlays />
     </>
   )

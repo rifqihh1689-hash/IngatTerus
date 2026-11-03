@@ -17,6 +17,7 @@ import {
   IconPlus,
   IconQuiz,
   IconSearch,
+  IconTarget,
   IconTimer,
   IconTrash,
   IconUpload,
@@ -26,6 +27,7 @@ import { formatInterval } from '../lib/fsrs'
 import { toCardText } from '../lib/importText'
 import { downloadText } from '../lib/image'
 import { distinctAnswerCount } from '../lib/quiz'
+import { isLeech } from '../lib/queue'
 import type { Card } from '../types'
 
 const PAGE = 40
@@ -80,6 +82,7 @@ export function DeckPage({ deckId }: { deckId: string }) {
   const c = colorOf(deck.color)
   const pending = summary ? summary.counts.fresh + summary.counts.learning + summary.counts.review : 0
   const canQuiz = distinctAnswerCount(cards) >= 2
+  const hasReviewed = cards.some((x) => x.state === 'review')
 
   const exportCsv = () => {
     downloadText(
@@ -130,9 +133,23 @@ export function DeckPage({ deckId }: { deckId: string }) {
         <div className={cx('h-1.5 w-16 rounded-full bg-gradient-to-r', c.bar)} />
         {deck.description && <p className="text-sm text-slate-600 dark:text-slate-300">{deck.description}</p>}
         {summary && <CountChips counts={summary.counts} />}
-        <Button size="lg" block disabled={pending === 0} onClick={() => navigate(`/belajar/${deck.id}`)}>
-          <IconPlay size={18} /> {pending === 0 ? 'Tidak ada kartu untuk hari ini' : `Belajar (${pending})`}
-        </Button>
+        {pending > 0 || !hasReviewed ? (
+          <Button size="lg" block disabled={pending === 0} onClick={() => navigate(`/belajar/${deck.id}`)}>
+            <IconPlay size={18} /> {pending === 0 ? 'Tidak ada kartu untuk hari ini' : `Belajar (${pending})`}
+          </Button>
+        ) : (
+          <Button size="lg" block onClick={() => navigate(`/belajar/${deck.id}?mode=ekstra`)}>
+            <IconTarget size={18} /> Semua beres · latihan tambahan
+          </Button>
+        )}
+        {summary && summary.counts.total > 0 && (
+          <div className="flex items-center gap-3">
+            <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+              <div className={cx('h-full rounded-full bg-gradient-to-r', c.bar)} style={{ width: `${Math.round(summary.mastery * 100)}%` }} />
+            </div>
+            <span className="text-xs text-slate-500 tabular-nums dark:text-slate-400">{Math.round(summary.mastery * 100)}% dikuasai</span>
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-2">
           <Button variant="secondary" disabled={!canQuiz} onClick={() => navigate(`/kuis/${deck.id}`)}>
             <IconQuiz size={18} /> Kuis
@@ -193,7 +210,12 @@ export function DeckPage({ deckId }: { deckId: string }) {
                   </p>
                   <p className="truncate text-sm text-slate-500 dark:text-slate-400">{toPlainText(card.back).replace(/\n/g, ' · ')}</p>
                 </div>
-                <StateBadge card={card} now={now} />
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  <StateBadge card={card} now={now} />
+                  {isLeech(card) && (
+                    <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800 dark:bg-amber-950 dark:text-amber-300">sering lupa</span>
+                  )}
+                </div>
               </Link>
             </li>
           ))}

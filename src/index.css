@@ -32,8 +32,18 @@
   --viz-grid: #e2e8f0;
   --viz-axis: #cbd5e1;
   --viz-muted: #64748b;
+  --heat-0: #e2e8f0;
+  --heat-1: #b7d3f6;
+  --heat-2: #6da7ec;
+  --heat-3: #2a78d6;
+  --heat-4: #184f95;
 }
 .dark {
+  --heat-0: #1e293b;
+  --heat-1: #184f95;
+  --heat-2: #256abf;
+  --heat-3: #3987e5;
+  --heat-4: #86b6ef;
   --viz-1: #3987e5;
   --viz-2: #d95926;
   --viz-3: #199e70;
