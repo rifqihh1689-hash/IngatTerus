@@ -34,6 +34,8 @@ Semua data tersimpan di perangkatmu sendiri — tanpa akun, tanpa server, tanpa 
   **cadangan & pulihkan JSON** untuk semua data.
 - **3 deck contoh** siap pakai: Kosakata Bahasa Inggris, Pengetahuan Umum & TWK Dasar,
   dan Rumus Matematika Dasar.
+- **Sinkron antar perangkat** — masuk dengan Google di laptop & HP: deck, kartu, riwayat, dan jadwal
+  ulang selalu sama, tetap bisa offline (Firebase, penggabungan bebas konflik).
 - **Pengingat belajar harian** lewat notifikasi browser.
 - **Antarmuka Bahasa Indonesia**, mobile-first, dengan **mode gelap** (ikut sistem, terang, atau gelap).
 - **Offline & dapat dipasang** (PWA dengan service worker Workbox).
@@ -92,6 +94,22 @@ Buka **Tambah → ✨ Buat dengan AI**:
 
 Cicil materi per subbab (1–3 halaman per prompt) ke deck yang sama; kartu duplikat dilewati
 otomatis. Prompt lengkapnya juga ada di [`docs/PROMPT-MATERI.md`](docs/PROMPT-MATERI.md).
+
+### Sinkron antar perangkat (laptop & HP)
+
+Buka **Pengaturan → Sinkron antar perangkat → Masuk dengan Google** di laptop, lalu lakukan hal yang
+sama dengan akun Google yang sama di HP. Data laptop otomatis muncul di HP, dan sebaliknya.
+
+- Sinkron berjalan otomatis: beberapa detik setelah ada perubahan, saat aplikasi dibuka atau kembali
+  online, dan berkala selama aplikasi terbuka. Ikon awan di kanan atas menunjukkan statusnya.
+- Tetap bisa belajar offline; perubahan dikirim begitu online.
+- Riwayat ulasan dari semua perangkat **digabung**, lalu jadwal ulang dihitung dari riwayat gabungan
+  dengan FSRS — hasilnya identik di semua perangkat, walau kartu yang sama sempat diulang di dua
+  perangkat saat offline. Isi kartu & deck: suntingan terbaru yang menang. Penghapusan ikut tersinkron.
+
+Fitur ini memakai proyek **Firebase** gratis (Auth + Firestore) yang dipasang sekali oleh pemilik
+aplikasi — panduan lengkapnya di [`docs/SINKRON-FIREBASE.md`](docs/SINKRON-FIREBASE.md).
+Firebase hanya dimuat bila sinkron dipakai, jadi aplikasi tetap ringan.
 
 ### Cadangan JSON
 
@@ -225,11 +243,26 @@ src/
 ├── components/     # UI: tombol, modal, editor kartu, grafik, tata letak
 ├── pages/          # Beranda, Deck, Editor, Belajar, Kuis, Ujian, Statistik, Impor, Pengaturan
 ├── hooks/          # useSettings, useDeckSummaries, useStreak, useTheme
+├── sync/           # sinkron: mesin penggabungan (+ tes), backend Firestore, login Google
 ├── sw.ts           # service worker: cache offline, pengingat, klik notifikasi
 └── App.tsx         # router hash & rute
 ```
 
+### Menguji sinkron secara lokal (Firebase Emulator)
+
+Butuh Java 11+ dan [Firebase CLI](https://firebase.google.com/docs/cli). Jalankan emulator, lalu
+aplikasi dalam mode emulator (login Google tiruan, tanpa proyek sungguhan):
+
+```bash
+npx firebase-tools emulators:start --only auth,firestore --project demo-ingatterus
+```
+
+```bash
+VITE_FIREBASE_EMULATOR=1 npm run dev
+```
+
 ## Privasi
 
-IngatTerus tidak memiliki server. Tidak ada data yang dikirim ke mana pun; semuanya disimpan di
-IndexedDB browser pada perangkatmu.
+IngatTerus tidak punya server sendiri. Tanpa sinkron, semua data hanya ada di IndexedDB browser pada
+perangkatmu. Bila sinkron dinyalakan, data disimpan di proyek Firebase milikmu dan hanya bisa dibaca
+akun Google-mu sendiri (dijaga aturan Firestore).
