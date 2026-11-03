@@ -67,6 +67,8 @@ export interface ReviewLog {
   day: string
   elapsedDays: number
   scheduledDays: number
+  /** Lama berpikir sebelum menjawab (ms) – opsional. */
+  durationMs?: number
 }
 
 export type QuizMode = 'kuis' | 'ujian'
@@ -95,6 +97,13 @@ export interface AppSettings {
   reminderTime: string
   lastReminderDay: string | null
   seeded: boolean
+  onboarded: boolean
+  /** Parameter FSRS-6 hasil optimasi pribadi; null = bawaan. */
+  fsrsParams: number[] | null
+  optimizedAt: number | null
+  optimizedReviews: number
+  optimizedLossBefore: number | null
+  optimizedLossAfter: number | null
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -105,4 +114,10 @@ export const DEFAULT_SETTINGS: AppSettings = {
   reminderTime: '19:00',
   lastReminderDay: null,
   seeded: false,
+  onboarded: false,
+  fsrsParams: null,
+  optimizedAt: null,
+  optimizedReviews: 0,
+  optimizedLossBefore: null,
+  optimizedLossAfter: null,
 }

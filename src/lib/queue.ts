@@ -1,6 +1,11 @@
 /** Penyusunan antrean belajar (fungsi murni). */
 import { endOfDay, MINUTE_MS } from './date'
+import { DEFAULT_W, retrievability } from './fsrs'
 import type { Card } from '../types'
+
+/** Kartu yang lupa ≥ 8 kali dianggap "leech": sebaiknya ditulis ulang/dipecah. */
+export const LEECH_LAPSES = 8
+export const isLeech = (card: Pick<Card, 'lapses'>) => card.lapses >= LEECH_LAPSES
 
 /** Kartu langkah belajar boleh ditampilkan lebih awal hingga 20 menit. */
 export const LEARN_AHEAD_MS = 20 * MINUTE_MS
@@ -75,4 +80,27 @@ export function pickNext(main: readonly Card[], learning: readonly Card[], now: 
   if (main.length > 0) return { card: main[0], from: 'main' }
   if (sorted.length > 0) return { card: sorted[0], from: 'learning' }
   return null
+}
+
+/** Gabungkan beberapa daftar bergantian (A1, B1, C1, A2, …) agar topik berselang-seling. */
+export function roundRobin<T>(lists: readonly (readonly T[])[]): T[] {
+  const out: T[] = []
+  const max = Math.max(0, ...lists.map((l) => l.length))
+  for (let i = 0; i < max; i++) for (const l of lists) if (i < l.length) out.push(l[i])
+  return out
+}
+
+/**
+ * Antrean latihan tambahan: kartu yang sudah pernah dipelajari tetapi belum
+ * jatuh tempo, diurutkan dari peluang ingat terendah (paling rawan lupa).
+ * Cocok untuk persiapan ujian; FSRS tetap menghitung ulangan lebih awal dengan benar.
+ */
+export function buildExtraQueue(cards: readonly Card[], now: number, limit = 20, w: readonly number[] = DEFAULT_W): Card[] {
+  const eod = endOfDay(now)
+  return cards
+    .filter((c) => c.state === 'review' && c.due > eod)
+    .map((c) => ({ c, r: retrievability(c, now, w) }))
+    .sort((a, b) => a.r - b.r)
+    .slice(0, limit)
+    .map((x) => x.c)
 }

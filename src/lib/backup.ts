@@ -139,6 +139,7 @@ export function parseBackup(json: string, now: number = Date.now()): ParsedBacku
       day: str(l.day) || dayKey(reviewedAt),
       elapsedDays: num(l.elapsedDays, 0),
       scheduledDays: num(l.scheduledDays, 0),
+      ...(typeof l.durationMs === 'number' && l.durationMs > 0 ? { durationMs: l.durationMs } : {}),
     })
   }
 

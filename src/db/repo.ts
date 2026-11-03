@@ -1,6 +1,7 @@
 /** Operasi data tingkat aplikasi di atas Dexie. */
-import { db as defaultDb, getSettings, uid, type IngatDB } from './db'
-import { makeParams, newSchedule, pickSchedule, schedule } from '../lib/fsrs'
+import { db as defaultDb, getSettings, setSetting, uid, type IngatDB } from './db'
+import { DEFAULT_W, isValidWeights, makeParams, newSchedule, pickSchedule, schedule } from '../lib/fsrs'
+import { buildDataset, optimizeWeights, replayMemory, type OptimizeResult } from '../lib/optimizer'
 import { dayKey } from '../lib/date'
 import { buildBackup, type BackupData } from '../lib/backup'
 import type { AppSettings, Card, Deck, QuizResult, Rating, ReviewLog } from '../types'
@@ -15,7 +16,11 @@ export interface CardInput {
 }
 
 export function paramsFromSettings(s: AppSettings) {
-  return makeParams({ desiredRetention: s.desiredRetention, maxInterval: s.maxInterval })
+  return makeParams({
+    w: isValidWeights(s.fsrsParams) ? s.fsrsParams : DEFAULT_W,
+    desiredRetention: s.desiredRetention,
+    maxInterval: s.maxInterval,
+  })
 }
 
 export async function createDeck(
@@ -122,13 +127,14 @@ export async function answerCard(
   rating: Rating,
   now: number = Date.now(),
   database: IngatDB = defaultDb,
+  durationMs?: number,
 ): Promise<{ card: Card; undo: AnswerUndo }> {
   const settings = await getSettings(database)
   const params = paramsFromSettings(settings)
   return database.transaction('rw', [database.cards, database.reviewLogs], async () => {
     const card = await database.cards.get(cardId)
     if (!card) throw new Error('Kartu tidak ditemukan')
-    const result = schedule(pickSchedule(card), rating, now, params)
+    const result = schedule(pickSchedule(card), rating, now, params, card.id)
     const updated: Card = { ...card, ...result.card }
     const log: ReviewLog = {
       id: uid(),
@@ -140,6 +146,7 @@ export async function answerCard(
       day: dayKey(now),
       elapsedDays: result.log.elapsedDays,
       scheduledDays: result.log.scheduledDays,
+      ...(durationMs != null && durationMs > 0 ? { durationMs: Math.min(Math.round(durationMs), 10 * 60_000) } : {}),
     }
     await database.cards.put(updated)
     await database.reviewLogs.add(log)
@@ -207,4 +214,64 @@ export async function wipeAll(database: IngatDB = defaultDb) {
   await database.transaction('rw', tables, async () => {
     await Promise.all(tables.map((t) => t.clear()))
   })
+}
+
+/** Data latih optimizer dari seluruh riwayat ulasan. */
+export async function loadTrainingData(database: IngatDB = defaultDb) {
+  return buildDataset(await database.reviewLogs.toArray())
+}
+
+/**
+ * Optimalkan parameter FSRS-6 dari riwayat, simpan bila lebih akurat, lalu hitung
+ * ulang stabilitas & kesulitan kartu (tanggal jatuh tempo tidak diubah).
+ */
+export async function optimizeAndApply(
+  onProgress?: (fraction: number) => void,
+  database: IngatDB = defaultDb,
+): Promise<OptimizeResult> {
+  const dataset = await loadTrainingData(database)
+  const result = await optimizeWeights(dataset, { onProgress })
+  if (result.improved) {
+    await database.transaction('rw', [database.settings], async () => {
+      await setSetting('fsrsParams', result.w, database)
+      await setSetting('optimizedAt', Date.now(), database)
+      await setSetting('optimizedReviews', result.reviews, database)
+      await setSetting('optimizedLossBefore', result.lossBefore, database)
+      await setSetting('optimizedLossAfter', result.lossAfter, database)
+    })
+    await recomputeMemoryStates(result.w, database)
+  }
+  return result
+}
+
+/** Kembali ke parameter bawaan FSRS-6. */
+export async function resetOptimizedParams(database: IngatDB = defaultDb) {
+  await setSetting('fsrsParams', null, database)
+  await setSetting('optimizedAt', null, database)
+  await setSetting('optimizedReviews', 0, database)
+  await setSetting('optimizedLossBefore', null, database)
+  await setSetting('optimizedLossAfter', null, database)
+  await recomputeMemoryStates(DEFAULT_W, database)
+}
+
+/** Hitung ulang S & D kartu dari riwayatnya dengan parameter `w`. Mengembalikan jumlah kartu yang diperbarui. */
+export async function recomputeMemoryStates(w: readonly number[], database: IngatDB = defaultDb): Promise<number> {
+  const [cards, logs] = await Promise.all([database.cards.toArray(), database.reviewLogs.toArray()])
+  const byCard = new Map<string, ReviewLog[]>()
+  for (const l of logs) {
+    const list = byCard.get(l.cardId)
+    if (list) list.push(l)
+    else byCard.set(l.cardId, [l])
+  }
+  const updates: Card[] = []
+  for (const card of cards) {
+    if (card.state === 'new') continue
+    const seqs = buildDataset(byCard.get(card.id) ?? [])
+    const last = seqs[seqs.length - 1]
+    if (!last) continue
+    const m = replayMemory(last, w)
+    updates.push({ ...card, stability: m.stability, difficulty: m.difficulty })
+  }
+  if (updates.length) await database.cards.bulkPut(updates)
+  return updates.length
 }
