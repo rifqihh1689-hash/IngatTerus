@@ -15,6 +15,8 @@ import { NotFoundPage } from './pages/NotFoundPage'
 import { db, getSettings } from './db/db'
 import { seedSampleDecks } from './data/sampleDecks'
 import { checkReminderNow } from './lib/notify'
+import { initSync } from './sync/manager'
+import { SyncChoiceDialog } from './components/SyncSection'
 
 interface Route {
   pattern: string
@@ -61,10 +63,17 @@ function useReminderLoop() {
   }, [])
 }
 
+let syncStarted = false
+
 export default function App() {
   const { path, query } = useLocation()
   useFirstRunSeed()
   useReminderLoop()
+  useEffect(() => {
+    if (syncStarted) return
+    syncStarted = true
+    void initSync()
+  }, [])
 
   let content: ReactNode = <NotFoundPage />
   let focus = false
@@ -84,6 +93,7 @@ export default function App() {
           {content}
         </div>
       </Layout>
+      <SyncChoiceDialog />
       <GlobalOverlays />
     </>
   )

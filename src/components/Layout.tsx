@@ -4,6 +4,7 @@ import { useTheme } from '../hooks/useTheme'
 import { applyUpdate, dismissPWA, usePWAStatus } from '../pwa'
 import { IconChart, IconHome, IconMoon, IconPlus, IconSettings, IconSun } from './icons'
 import { cx } from './ui'
+import { SyncIndicator } from './SyncSection'
 
 const NAV = [
   { to: '/', label: 'Beranda', icon: IconHome, match: (p: string) => p === '/' || p.startsWith('/deck') || p.startsWith('/kartu') },
@@ -29,6 +30,7 @@ export function Layout({ children, focus = false }: { children: ReactNode; focus
               </span>
             </Link>
             <div className="flex-1" />
+            <SyncIndicator />
             <button
               type="button"
               onClick={() => setPref(dark ? 'light' : 'dark')}

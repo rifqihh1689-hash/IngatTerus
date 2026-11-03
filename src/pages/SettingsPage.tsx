@@ -2,6 +2,8 @@ import { useRef, useState, type ReactNode } from 'react'
 import { setSetting } from '../db/db'
 import { exportAll, restoreBackup, wipeAll, type RestoreMode } from '../db/repo'
 import { AlgorithmSection } from '../components/AlgorithmSection'
+import { SyncSection } from '../components/SyncSection'
+import { getSyncStatus } from '../sync/manager'
 import { useSettings } from '../hooks/useData'
 import { useTheme, type ThemePref } from '../hooks/useTheme'
 import { seedSampleDecks } from '../data/sampleDecks'
@@ -125,7 +127,9 @@ export function SettingsPage() {
   const wipe = async () => {
     const ok = await confirmDialog({
       title: 'Hapus semua data?',
-      message: 'Semua deck, kartu, riwayat, dan hasil kuis akan dihapus permanen dari perangkat ini. Unduh cadangan dulu bila perlu.',
+      message: getSyncStatus().user
+        ? 'Semua deck, kartu, riwayat, dan hasil kuis akan dihapus permanen dari perangkat ini DAN semua perangkat yang tersinkron. Unduh cadangan dulu bila perlu.'
+        : 'Semua deck, kartu, riwayat, dan hasil kuis akan dihapus permanen dari perangkat ini. Unduh cadangan dulu bila perlu.',
       confirmLabel: 'Hapus semua',
       danger: true,
     })
@@ -156,6 +160,8 @@ export function SettingsPage() {
           </Button>
         </Panel>
       )}
+
+      <SyncSection />
 
       <Section title="Tampilan">
         <div className="py-3">
