@@ -6,6 +6,7 @@ import { Link, navigate } from '../router'
 import { Button, Field, PageHeader, Panel, Segmented, Select, TextArea, TextInput, Toggle, cx, toast } from '../components/ui'
 import { IconFile, IconUpload } from '../components/icons'
 import { RichText } from '../components/RichText'
+import { AiPromptHelper } from '../components/AiPromptHelper'
 import { findDuplicates, parseCardText, type Delimiter } from '../lib/importText'
 
 const EXAMPLE = `# Format: pertanyaan;jawaban  (baris diawali # diabaikan)
@@ -16,7 +17,8 @@ apple;apel\\n*I eat an apple every day.*
 
 const NEW_DECK = '__baru__'
 
-export function ImportPage({ initialDeckId }: { initialDeckId?: string }) {
+export function ImportPage({ initialDeckId, initialTab }: { initialDeckId?: string; initialTab?: string }) {
+  const [tab, setTab] = useState<'ai' | 'tempel'>(initialTab === 'tempel' ? 'tempel' : 'ai')
   const decks = useLiveQuery(() => db.decks.orderBy('createdAt').toArray(), [])
   const [deckId, setDeckId] = useState(initialDeckId ?? '')
   const [newName, setNewName] = useState('')
@@ -74,7 +76,23 @@ export function ImportPage({ initialDeckId }: { initialDeckId?: string }) {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Impor kartu" subtitle="Dari teks, CSV, atau TSV" back={initialDeckId ? `/deck/${initialDeckId}` : undefined} />
+      <PageHeader title="Tambah materi" subtitle="Buat kartu dengan AI, atau impor teks/CSV" back={initialDeckId ? `/deck/${initialDeckId}` : undefined} />
+
+      <Segmented
+        label="Cara menambah kartu"
+        value={tab}
+        onChange={setTab}
+        options={[
+          { value: 'ai', label: '✨ Buat dengan AI' },
+          { value: 'tempel', label: 'Sudah punya kartu' },
+        ]}
+      />
+
+      {tab === 'ai' && (
+        <Panel className="animate-fade-in">
+          <AiPromptHelper />
+        </Panel>
+      )}
 
       <Panel className="space-y-4">
         <Field label="Masukkan ke deck">

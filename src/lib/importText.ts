@@ -124,7 +124,23 @@ export function detectDelimiter(text: string): Delimiter {
 
 const unescapeText = (s: string) => s.replace(/\\n/g, '\n').trim()
 
-export function parseCardText(text: string, options: ParseOptions = {}): ParseResult {
+const FENCE = /^\s*```/
+
+/**
+ * Bila teks berisi blok kode Markdown (hasil salinan jawaban AI), ambil hanya isi
+ * blok kode pertama. Baris di luar blok dikosongkan agar nomor baris tetap sesuai.
+ */
+export function keepFirstCodeBlock(text: string): string {
+  const lines = text.replace(/\r\n?/g, '\n').split('\n')
+  const open = lines.findIndex((l) => FENCE.test(l))
+  if (open === -1) return text
+  let close = lines.findIndex((l, i) => i > open && FENCE.test(l))
+  if (close === -1) close = lines.length
+  return lines.map((l, i) => (i > open && i < close ? l : '')).join('\n')
+}
+
+export function parseCardText(rawText: string, options: ParseOptions = {}): ParseResult {
+  const text = keepFirstCodeBlock(rawText)
   const delimiter =
     !options.delimiter || options.delimiter === 'auto' ? detectDelimiter(text) : options.delimiter
   const headerMode = options.header ?? 'auto'
