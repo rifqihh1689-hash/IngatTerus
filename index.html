@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="IngatTerus — belajar flashcard dengan pengulangan berjarak (FSRS). Gratis, offline, tanpa akun." />
+    <meta name="theme-color" content="#4f46e5" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <title>IngatTerus — Flashcard Pintar</title>
+    <script>
+      // Terapkan tema sebelum render agar tidak berkedip.
+      ;(function () {
+        try {
+          var t = localStorage.getItem('ingatterus-theme') || 'system'
+          var dark = t === 'dark' || (t === 'system' && matchMedia('(prefers-color-scheme: dark)').matches)
+          if (dark) document.documentElement.classList.add('dark')
+        } catch (e) {}
+      })()
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript>IngatTerus membutuhkan JavaScript agar bisa berjalan.</noscript>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
