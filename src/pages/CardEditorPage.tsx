@@ -7,7 +7,9 @@ import { RichEditor } from '../components/RichEditor'
 import { Button, EmptyState, Field, PageHeader, Panel, Select, confirmDialog, toast } from '../components/ui'
 import { IconRefresh, IconTrash } from '../components/icons'
 import { formatDateTime } from '../lib/date'
-import { retrievability } from '../lib/fsrs'
+import { DEFAULT_W, isValidWeights, retrievability } from '../lib/fsrs'
+import { isLeech } from '../lib/queue'
+import { useSettings } from '../hooks/useData'
 import { formatPercent } from '../lib/stats'
 import type { Card } from '../types'
 
@@ -28,6 +30,8 @@ export function CardEditorPage({ deckId, cardId }: { deckId?: string; cardId?: s
   const [targetDeck, setTargetDeck] = useState(deckId ?? '')
   const [loadedId, setLoadedId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const settings = useSettings()
+  const w = isValidWeights(settings.fsrsParams) ? settings.fsrsParams : DEFAULT_W
 
   useEffect(() => {
     if (existing && existing.id !== loadedId) {
@@ -152,6 +156,12 @@ export function CardEditorPage({ deckId, cardId }: { deckId?: string; cardId?: s
       {existing && (
         <Panel className="space-y-3">
           <h2 className="font-semibold">Kemajuan kartu</h2>
+          {isLeech(existing) && (
+            <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+              Kartu ini sudah {existing.lapses}× lupa. Biasanya kartu seperti ini terlalu panjang atau mirip kartu lain: coba pecah
+              menjadi 2–3 kartu kecil, tambahkan contoh, atau tulis ulang pertanyaannya.
+            </p>
+          )}
           <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
             <dt className="text-slate-500">Status</dt>
             <dd className="text-right font-medium">{STATE_LABEL[existing.state]}</dd>
@@ -166,7 +176,7 @@ export function CardEditorPage({ deckId, cardId }: { deckId?: string; cardId?: s
                 <dt className="text-slate-500">Kesulitan</dt>
                 <dd className="text-right font-medium">{existing.difficulty.toFixed(1).replace('.', ',')} / 10</dd>
                 <dt className="text-slate-500">Peluang ingat saat ini</dt>
-                <dd className="text-right font-medium">{formatPercent(retrievability(existing))}</dd>
+                <dd className="text-right font-medium">{formatPercent(retrievability(existing, Date.now(), w))}</dd>
               </>
             )}
           </dl>

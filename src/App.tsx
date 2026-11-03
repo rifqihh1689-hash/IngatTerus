@@ -27,11 +27,11 @@ const ROUTES: Route[] = [
   { pattern: '/deck/:id', render: (p) => <DeckPage deckId={p.id} /> },
   { pattern: '/deck/:id/kartu-baru', render: (p) => <CardEditorPage deckId={p.id} /> },
   { pattern: '/kartu/:id', render: (p) => <CardEditorPage cardId={p.id} /> },
-  { pattern: '/belajar/:id', focus: true, render: (p) => <StudyPage deckId={p.id} /> },
+  { pattern: '/belajar/:id', focus: true, render: (p, q) => <StudyPage deckId={p.id} extra={q.get('mode') === 'ekstra'} /> },
   { pattern: '/kuis/:id', focus: true, render: (p) => <QuizPage deckId={p.id} /> },
   { pattern: '/ujian/:id', focus: true, render: (p) => <ExamPage deckId={p.id} /> },
   { pattern: '/statistik', render: () => <StatsPage /> },
-  { pattern: '/impor', render: (_p, q) => <ImportPage initialDeckId={q.get('deck') ?? undefined} /> },
+  { pattern: '/impor', render: (_p, q) => <ImportPage initialDeckId={q.get('deck') ?? undefined} initialTab={q.get('tab') ?? (q.get('deck') ? 'tempel' : undefined)} /> },
   { pattern: '/pengaturan', render: () => <SettingsPage /> },
 ]
 

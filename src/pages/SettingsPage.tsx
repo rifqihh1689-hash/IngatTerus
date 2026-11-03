@@ -1,6 +1,7 @@
 import { useRef, useState, type ReactNode } from 'react'
 import { setSetting } from '../db/db'
 import { exportAll, restoreBackup, wipeAll, type RestoreMode } from '../db/repo'
+import { AlgorithmSection } from '../components/AlgorithmSection'
 import { useSettings } from '../hooks/useData'
 import { useTheme, type ThemePref } from '../hooks/useTheme'
 import { seedSampleDecks } from '../data/sampleDecks'
@@ -206,9 +207,11 @@ export function SettingsPage() {
           </Select>
         </Row>
         <p className="py-3 text-xs text-slate-500 dark:text-slate-400">
-          Penjadwalan memakai algoritma <b>FSRS-5</b>: setiap jawaban (Lupa/Sulit/Bisa/Mudah) memperbarui stabilitas & kesulitan kartu, lalu kartu dijadwalkan tepat sebelum kamu diperkirakan lupa.
+          90% adalah titik paling efisien bagi kebanyakan orang. Naikkan ke 93–95% menjelang ujian penting (ulangan lebih sering), turunkan ke 85% bila beban harian terlalu berat.
         </p>
       </Section>
+
+      <AlgorithmSection />
 
       <Section title="Pengingat harian">
         <Row

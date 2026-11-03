@@ -285,3 +285,12 @@ describe('fitur belajar tambahan', () => {
     expect(isLeech({ lapses: 8 })).toBe(true)
   })
 })
+
+describe('format waktu belajar', () => {
+  it('detik, menit, dan jam', async () => {
+    const { formatStudyTime } = await import('./stats')
+    expect(formatStudyTime(42_000)).toBe('42 dtk')
+    expect(formatStudyTime(12 * 60_000)).toBe('12 mnt')
+    expect(formatStudyTime(80 * 60_000)).toBe('1 j 20 m')
+  })
+})

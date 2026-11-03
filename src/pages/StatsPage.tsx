@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
-import { useStreak } from '../hooks/useData'
+import { useSettings, useStreak } from '../hooks/useData'
 import { PageHeader, Panel, Segmented, EmptyState } from '../components/ui'
-import { ColumnChart, DataTable, SegmentedBar } from '../components/Charts'
+import { ColumnChart, DataTable, Heatmap, SegmentedBar } from '../components/Charts'
 import { IconChart, IconFlame } from '../components/icons'
-import { averageRetrievability, cardMaturity, dailyCounts, dueForecast, formatPercent, retentionRate } from '../lib/stats'
+import { averageRetrievability, cardMaturity, dailyCounts, dueForecast, formatPercent, formatStudyTime, retentionRate } from '../lib/stats'
+import { DEFAULT_W, isValidWeights } from '../lib/fsrs'
 import { DAY_MS, dayKey, formatDateTime, formatDayShort, shiftDayKey, startOfDay, weekdayShort } from '../lib/date'
 
 type Range = 7 | 30 | 90
@@ -23,9 +24,11 @@ function Tile({ label, value, sub }: { label: string; value: string; sub?: strin
 export function StatsPage() {
   const [range, setRange] = useState<Range>(30)
   const streak = useStreak()
+  const settings = useSettings()
+  const w = isValidWeights(settings.fsrsParams) ? settings.fsrsParams : DEFAULT_W
   const today = dayKey()
   const data = useLiveQuery(async () => {
-    const since = startOfDay(Date.now()) - 89 * DAY_MS
+    const since = startOfDay(Date.now()) - 125 * DAY_MS
     const [cards, logs, quizzes, decks] = await Promise.all([
       db.cards.toArray(),
       db.reviewLogs.where('reviewedAt').aboveOrEqual(since).toArray(),
@@ -62,13 +65,15 @@ export function StatsPage() {
       perDeck,
       quizzes,
       retention: retentionRate(logs),
-      avgR: averageRetrievability(data.cards, now),
+      avgR: averageRetrievability(data.cards, now, w),
+      heat: dailyCounts(data.logs, 126, today),
+      studyMs: logs.reduce((sum, l) => sum + (l.durationMs ?? 0), 0),
       reviews: logs.length,
       activeDays: new Set([...logs.map((l) => l.day), ...quizzes.map((q) => q.day)]).size,
       quizAvg: quizzes.length ? quizzes.reduce((s, q) => s + (q.total ? q.correct / q.total : 0), 0) / quizzes.length : null,
       dueToday: forecast[0]?.count ?? 0,
     }
-  }, [data, range, today])
+  }, [data, range, today, w])
 
   if (!view || !data) return <div className="h-64 animate-pulse rounded-2xl bg-slate-200/70 dark:bg-slate-800/60" />
 
@@ -110,6 +115,20 @@ export function StatsPage() {
         <Tile label="Jatuh tempo hari ini" value={String(view.dueToday)} sub={`${m.baru} kartu baru belum dipelajari`} />
         <Tile label="Peluang ingat saat ini" value={formatPercent(view.avgR)} sub="rata-rata kartu yang sudah dipelajari" />
       </div>
+
+      <Panel>
+        <h2 className="font-semibold">Kalender belajar</h2>
+        <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">Jumlah ulasan per hari, 18 minggu terakhir</p>
+        <Heatmap
+          label="Kalender jumlah ulasan per hari selama 18 minggu terakhir"
+          days={view.heat.map((d) => ({ day: d.day, count: d.total, title: `${weekdayShort(d.day)}, ${formatDayShort(d.day)}` }))}
+        />
+        <DataTable
+          head={['Tanggal', 'Ulasan']}
+          rows={[...view.heat].reverse().filter((d) => d.total > 0).map((d) => [formatDayShort(d.day), d.total])}
+          summary="Lihat tabel hari aktif"
+        />
+      </Panel>
 
       <Panel>
         <h2 className="font-semibold">Kematangan kartu</h2>
@@ -171,6 +190,12 @@ export function StatsPage() {
       <div className="grid grid-cols-2 gap-2">
         <Tile label="Tingkat ingatan" value={formatPercent(view.retention)} sub="kartu review yang diingat" />
         <Tile label="Total ulasan" value={view.reviews.toLocaleString('id-ID')} sub={`${view.activeDays} dari ${range} hari aktif`} />
+        <Tile label="Waktu berpikir" value={formatStudyTime(view.studyMs)} sub="total waktu menjawab kartu" />
+        <Tile
+          label="Rata-rata per kartu"
+          value={view.reviews && view.studyMs ? formatStudyTime(view.studyMs / view.reviews) : '–'}
+          sub="makin cepat = makin hafal"
+        />
       </div>
 
       <Panel>

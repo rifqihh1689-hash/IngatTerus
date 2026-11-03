@@ -15,6 +15,7 @@ import {
 } from '../components/QuizCommon'
 import { buildQuiz, distinctAnswerCount, quizEligible, scoreQuiz, type QuizDirection, type QuizQuestion } from '../lib/quiz'
 import { formatClock } from '../lib/date'
+import { confetti } from '../lib/celebrate'
 
 type Phase = 'setup' | 'run' | 'done'
 
@@ -60,6 +61,7 @@ export function ExamPage({ deckId }: { deckId: string }) {
       setTimedOut(byTimeout)
       setPhase('done')
       const score = scoreQuiz(questions, finalAnswers)
+      if (score.percent >= 80) confetti()
       await saveQuizResult({ deckId, mode: 'ujian', total: score.total, correct: score.correct, durationSec: sec })
     },
     [deckId, minutes, questions],

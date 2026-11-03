@@ -242,3 +242,83 @@ export function DataTable({ head, rows, summary = 'Lihat tabel' }: { head: strin
     </details>
   )
 }
+
+const HEAT_STEPS = [
+  { min: 0, label: '0' },
+  { min: 1, label: '1–9' },
+  { min: 10, label: '10–29' },
+  { min: 30, label: '30–59' },
+  { min: 60, label: '60+' },
+]
+const heatLevel = (n: number) => (n >= 60 ? 4 : n >= 30 ? 3 : n >= 10 ? 2 : n >= 1 ? 1 : 0)
+
+/**
+ * Kalender aktivitas ala GitHub: satu kotak per hari, kolom = minggu (Senin di atas).
+ * Satu hue berurutan (terang → gelap = sedikit → banyak) dengan langkah terpisah untuk mode gelap.
+ */
+export function Heatmap({
+  days,
+  label,
+}: {
+  /** Urut dari lama ke hari ini. */
+  days: { day: string; count: number; title: string }[]
+  label: string
+}) {
+  const [ref, width] = useWidth<HTMLDivElement>()
+  const [active, setActive] = useState<number | null>(null)
+  // geser agar kolom pertama dimulai hari Senin
+  const firstDow = (new Date(`${days[0]?.day ?? '2026-01-05'}T12:00:00`).getDay() + 6) % 7
+  const cells: ({ day: string; count: number; title: string } | null)[] = [...Array(firstDow).fill(null), ...days]
+  const weeks = Math.ceil(cells.length / 7)
+  const gap = 3
+  const labelW = 22
+  const size = Math.max(8, Math.min(16, Math.floor((width - labelW - gap * (weeks - 1)) / weeks)))
+  const act = active != null ? cells[active] : null
+  const DOW = ['Sen', '', 'Rab', '', 'Jum', '', 'Min']
+
+  return (
+    <div ref={ref} className="relative" onPointerLeave={() => setActive(null)}>
+      <div className="flex" role="img" aria-label={label}>
+        <div className="flex flex-col text-[9px] text-slate-400" style={{ width: labelW, gap }}>
+          {DOW.map((d, i) => (
+            <span key={i} style={{ height: size, lineHeight: `${size}px` }}>
+              {d}
+            </span>
+          ))}
+        </div>
+        <div className="grid grid-flow-col" style={{ gap, gridTemplateRows: `repeat(7, ${size}px)`, gridAutoColumns: `${size}px` }}>
+          {cells.map((c, i) =>
+            c ? (
+              <span
+                key={c.day}
+                tabIndex={0}
+                aria-label={`${c.title}: ${c.count} ulasan`}
+                onPointerEnter={() => setActive(i)}
+                onPointerDown={() => setActive(i)}
+                onFocus={() => setActive(i)}
+                onBlur={() => setActive(null)}
+                className={cx('rounded-[3px] outline-none', active === i && 'ring-2 ring-indigo-500 ring-offset-1 ring-offset-white dark:ring-offset-slate-900')}
+                style={{ background: `var(--heat-${heatLevel(c.count)})` }}
+              />
+            ) : (
+              <span key={`pad-${i}`} />
+            ),
+          )}
+        </div>
+      </div>
+      {act && (
+        <div className="pointer-events-none absolute -top-11 left-1/2 z-10 -translate-x-1/2 rounded-xl bg-white px-3 py-1.5 text-xs whitespace-nowrap shadow-lg ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700">
+          <span className="font-bold text-slate-900 dark:text-white">{act.count} ulasan</span>
+          <span className="ml-1.5 text-slate-500 dark:text-slate-400">{act.title}</span>
+        </div>
+      )}
+      <div className="mt-2 flex items-center justify-end gap-1 text-[10px] text-slate-500 dark:text-slate-400">
+        <span className="mr-1">Sedikit</span>
+        {HEAT_STEPS.map((s, i) => (
+          <span key={s.label} title={s.label} className="h-2.5 w-2.5 rounded-[2px]" style={{ background: `var(--heat-${i})` }} />
+        ))}
+        <span className="ml-1">Banyak</span>
+      </div>
+    </div>
+  )
+}

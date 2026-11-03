@@ -2,13 +2,13 @@ import type { ReactNode } from 'react'
 import { Link, useLocation } from '../router'
 import { useTheme } from '../hooks/useTheme'
 import { applyUpdate, dismissPWA, usePWAStatus } from '../pwa'
-import { IconChart, IconHome, IconMoon, IconSettings, IconSun, IconUpload } from './icons'
+import { IconChart, IconHome, IconMoon, IconPlus, IconSettings, IconSun } from './icons'
 import { cx } from './ui'
 
 const NAV = [
   { to: '/', label: 'Beranda', icon: IconHome, match: (p: string) => p === '/' || p.startsWith('/deck') || p.startsWith('/kartu') },
   { to: '/statistik', label: 'Statistik', icon: IconChart, match: (p: string) => p.startsWith('/statistik') },
-  { to: '/impor', label: 'Impor', icon: IconUpload, match: (p: string) => p.startsWith('/impor') },
+  { to: '/impor', label: 'Tambah', icon: IconPlus, match: (p: string) => p.startsWith('/impor') },
   { to: '/pengaturan', label: 'Pengaturan', icon: IconSettings, match: (p: string) => p.startsWith('/pengaturan') },
 ]
 
@@ -78,11 +78,18 @@ export function Layout({ children, focus = false }: { children: ReactNode; focus
                   to={to}
                   aria-current={active ? 'page' : undefined}
                   className={cx(
-                    'flex flex-col items-center gap-0.5 py-2.5 text-[11px] font-medium transition',
-                    active ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200',
+                    'group flex flex-col items-center gap-1 pt-2 pb-2.5 text-[11px] font-medium transition',
+                    active ? 'text-indigo-600 dark:text-indigo-300' : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200',
                   )}
                 >
-                  <Icon size={22} strokeWidth={active ? 2.4 : 2} />
+                  <span
+                    className={cx(
+                      'flex h-8 w-14 items-center justify-center rounded-full transition-colors',
+                      active ? 'bg-indigo-100 dark:bg-indigo-500/20' : 'group-hover:bg-slate-100 dark:group-hover:bg-slate-800',
+                    )}
+                  >
+                    <Icon size={21} strokeWidth={active ? 2.4 : 2} />
+                  </span>
                   {label}
                 </Link>
               )
