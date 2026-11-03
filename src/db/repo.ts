@@ -1,10 +1,13 @@
 /** Operasi data tingkat aplikasi di atas Dexie. */
-import { db as defaultDb, getSettings, setSetting, uid, type IngatDB } from './db'
-import { DEFAULT_W, isValidWeights, makeParams, newSchedule, pickSchedule, schedule } from '../lib/fsrs'
+import { addTombstones, db as defaultDb, getSettings, setSetting, uid, type IngatDB } from './db'
+import { paramsFromSettings } from './params'
+import { DEFAULT_W, newSchedule, pickSchedule, schedule } from '../lib/fsrs'
 import { buildDataset, optimizeWeights, replayMemory, type OptimizeResult } from '../lib/optimizer'
 import { dayKey } from '../lib/date'
 import { buildBackup, type BackupData } from '../lib/backup'
-import type { AppSettings, Card, Deck, QuizResult, Rating, ReviewLog } from '../types'
+import type { Card, Deck, QuizResult, Rating, ReviewLog } from '../types'
+
+export { paramsFromSettings }
 
 export const DECK_COLORS = ['indigo', 'emerald', 'amber', 'rose', 'sky', 'violet', 'teal', 'orange'] as const
 
@@ -15,21 +18,13 @@ export interface CardInput {
   backImage?: string
 }
 
-export function paramsFromSettings(s: AppSettings) {
-  return makeParams({
-    w: isValidWeights(s.fsrsParams) ? s.fsrsParams : DEFAULT_W,
-    desiredRetention: s.desiredRetention,
-    maxInterval: s.maxInterval,
-  })
-}
-
 export async function createDeck(
-  input: { name: string; description?: string; color?: string; sample?: string },
+  input: { name: string; description?: string; color?: string; sample?: string; id?: string },
   database: IngatDB = defaultDb,
 ): Promise<string> {
   const now = Date.now()
   const deck: Deck = {
-    id: uid(),
+    id: input.id ?? uid(),
     name: input.name.trim() || 'Deck tanpa nama',
     description: input.description?.trim() ?? '',
     color: input.color ?? 'indigo',
@@ -37,7 +32,7 @@ export async function createDeck(
     updatedAt: now,
     ...(input.sample ? { sample: input.sample } : {}),
   }
-  await database.decks.add(deck)
+  await database.decks.put(deck)
   return deck.id
 }
 
@@ -50,17 +45,31 @@ export async function updateDeck(
 }
 
 export async function deleteDeck(id: string, database: IngatDB = defaultDb) {
-  await database.transaction('rw', [database.decks, database.cards, database.reviewLogs, database.quizResults], async () => {
-    await database.cards.where('deckId').equals(id).delete()
-    await database.reviewLogs.where('deckId').equals(id).delete()
-    await database.quizResults.where('deckId').equals(id).delete()
-    await database.decks.delete(id)
-  })
+  await database.transaction(
+    'rw',
+    [database.decks, database.cards, database.reviewLogs, database.quizResults, database.tombstones],
+    async () => {
+      const cardIds = (await database.cards.where('deckId').equals(id).primaryKeys()) as string[]
+      const logIds = (await database.reviewLogs.where('deckId').equals(id).primaryKeys()) as string[]
+      const quizIds = (await database.quizResults.where('deckId').equals(id).primaryKeys()) as string[]
+      // riwayat kartu yang dipindah dari deck lain juga ikut terhapus
+      const movedLogIds = (await database.reviewLogs.where('cardId').anyOf(cardIds).primaryKeys()) as string[]
+      const allLogIds = [...new Set([...logIds, ...movedLogIds])]
+      await addTombstones(database, 'cards', cardIds)
+      await addTombstones(database, 'reviewLogs', allLogIds)
+      await addTombstones(database, 'quizResults', quizIds)
+      await addTombstones(database, 'decks', [id])
+      await database.cards.bulkDelete(cardIds)
+      await database.reviewLogs.bulkDelete(allLogIds)
+      await database.quizResults.bulkDelete(quizIds)
+      await database.decks.delete(id)
+    },
+  )
 }
 
-function makeCard(deckId: string, input: CardInput, now: number, order = 0): Card {
+function makeCard(deckId: string, input: CardInput & { id?: string }, now: number, order = 0): Card {
   return {
-    id: uid(),
+    id: input.id ?? uid(),
     deckId,
     front: input.front.trim(),
     back: input.back.trim(),
@@ -69,7 +78,7 @@ function makeCard(deckId: string, input: CardInput, now: number, order = 0): Car
     // createdAt bertambah sedikit agar urutan kartu baru mengikuti urutan input
     createdAt: now + order,
     updatedAt: now,
-    ...newSchedule(now),
+    ...newSchedule(now + order),
   }
 }
 
@@ -80,10 +89,10 @@ export async function addCard(deckId: string, input: CardInput, database: IngatD
   return card.id
 }
 
-export async function addCards(deckId: string, inputs: CardInput[], database: IngatDB = defaultDb): Promise<number> {
+export async function addCards(deckId: string, inputs: (CardInput & { id?: string })[], database: IngatDB = defaultDb): Promise<number> {
   const now = Date.now()
   const cards = inputs.map((c, i) => makeCard(deckId, c, now, i))
-  await database.cards.bulkAdd(cards)
+  await database.cards.bulkPut(cards)
   await database.decks.update(deckId, { updatedAt: now })
   return cards.length
 }
@@ -105,15 +114,20 @@ export async function updateCard(id: string, input: CardInput, database: IngatDB
 }
 
 export async function deleteCard(id: string, database: IngatDB = defaultDb) {
-  await database.transaction('rw', [database.cards, database.reviewLogs], async () => {
-    await database.reviewLogs.where('cardId').equals(id).delete()
+  await database.transaction('rw', [database.cards, database.reviewLogs, database.tombstones], async () => {
+    const logIds = (await database.reviewLogs.where('cardId').equals(id).primaryKeys()) as string[]
+    await addTombstones(database, 'reviewLogs', logIds)
+    await addTombstones(database, 'cards', [id])
+    await database.reviewLogs.bulkDelete(logIds)
     await database.cards.delete(id)
   })
 }
 
 /** Atur ulang jadwal kartu menjadi kartu baru. */
 export async function resetCard(id: string, database: IngatDB = defaultDb) {
-  await database.cards.update(id, { ...newSchedule(Date.now()) })
+  const now = Date.now()
+  // resetAt ikut disinkron: perangkat lain mengabaikan riwayat sebelum waktu ini
+  await database.cards.update(id, { ...newSchedule(now), resetAt: now, updatedAt: now })
 }
 
 export interface AnswerUndo {
@@ -147,6 +161,8 @@ export async function answerCard(
       elapsedDays: result.log.elapsedDays,
       scheduledDays: result.log.scheduledDays,
       ...(durationMs != null && durationMs > 0 ? { durationMs: Math.min(Math.round(durationMs), 10 * 60_000) } : {}),
+      before: { reps: card.reps, lastReview: card.lastReview },
+      after: result.card,
     }
     await database.cards.put(updated)
     await database.reviewLogs.add(log)
@@ -155,9 +171,10 @@ export async function answerCard(
 }
 
 export async function undoAnswer(undo: AnswerUndo, database: IngatDB = defaultDb) {
-  await database.transaction('rw', [database.cards, database.reviewLogs], async () => {
+  await database.transaction('rw', [database.cards, database.reviewLogs, database.tombstones], async () => {
     await database.cards.put(undo.previous)
     await database.reviewLogs.delete(undo.logId)
+    await addTombstones(database, 'reviewLogs', [undo.logId])
   })
 }
 
@@ -190,29 +207,55 @@ export async function exportAll(database: IngatDB = defaultDb): Promise<BackupDa
 
 export type RestoreMode = 'gabung' | 'ganti'
 
+const CONTENT_TABLES = ['decks', 'cards', 'reviewLogs', 'quizResults'] as const
+
 /**
  * Pulihkan cadangan.
  *  - "ganti": hapus semua data lalu isi dengan cadangan.
- *  - "gabung": tambahkan/timpa entri dengan id yang sama, data lain tetap.
+ *  - "gabung": tambahkan/timpa entri dengan id yang sama, data lain tetap; jadwal
+ *    kartu dihitung ulang dari riwayat gabungan (aman untuk sinkron manual).
  */
 export async function restoreBackup(data: BackupData, mode: RestoreMode, database: IngatDB = defaultDb) {
-  const tables = [database.decks, database.cards, database.reviewLogs, database.quizResults, database.settings]
+  const tables = [database.decks, database.cards, database.reviewLogs, database.quizResults, database.settings, database.tombstones]
   await database.transaction('rw', tables, async () => {
-    if (mode === 'ganti') await Promise.all(tables.map((t) => t.clear()))
+    if (mode === 'ganti') {
+      const keep = {
+        decks: new Set(data.decks.map((d) => d.id)),
+        cards: new Set(data.cards.map((c) => c.id)),
+        reviewLogs: new Set(data.reviewLogs.map((l) => l.id)),
+        quizResults: new Set(data.quizResults.map((q) => q.id)),
+      }
+      for (const t of CONTENT_TABLES) {
+        const ids = (await database.table(t).toCollection().primaryKeys()) as string[]
+        await addTombstones(database, t, ids.filter((id) => !keep[t].has(id)))
+        await database.table(t).clear()
+      }
+    }
     await database.decks.bulkPut(data.decks)
     await database.cards.bulkPut(data.cards)
     await database.reviewLogs.bulkPut(data.reviewLogs)
     await database.quizResults.bulkPut(data.quizResults)
     // pengaturan hanya dipulihkan saat mode ganti agar preferensi perangkat ini tidak tertimpa
-    if (mode === 'ganti') await database.settings.bulkPut(data.settings)
-    else await database.settings.put({ key: 'seeded', value: true })
+    if (mode === 'ganti') {
+      const deviceKeys = new Set(['syncUid', 'syncCursor', 'lastSyncAt'])
+      await database.settings.bulkPut(data.settings.filter((s) => !deviceKeys.has(s.key)).map((s) => ({ ...s, updatedAt: Date.now() })))
+    } else await database.settings.put({ key: 'seeded', value: true })
   })
+  if (mode === 'gabung') {
+    const { rescheduleAll } = await import('../sync/engine')
+    await rescheduleAll(database, data.cards.map((c) => c.id))
+  }
 }
 
+/** Hapus semua deck, kartu, riwayat, dan hasil kuis (juga di perangkat lain yang tersinkron). */
 export async function wipeAll(database: IngatDB = defaultDb) {
-  const tables = [database.decks, database.cards, database.reviewLogs, database.quizResults]
+  const tables = [database.decks, database.cards, database.reviewLogs, database.quizResults, database.tombstones]
   await database.transaction('rw', tables, async () => {
-    await Promise.all(tables.map((t) => t.clear()))
+    for (const t of CONTENT_TABLES) {
+      const ids = (await database.table(t).toCollection().primaryKeys()) as string[]
+      await addTombstones(database, t, ids)
+      await database.table(t).clear()
+    }
   })
 }
 
