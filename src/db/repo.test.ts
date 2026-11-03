@@ -124,3 +124,30 @@ describe('repositori data', () => {
     }
   })
 })
+
+describe('deck contoh', () => {
+  it('menambahkan 3 deck contoh sekali saja', async () => {
+    const { seedSampleDecks, SAMPLE_DECKS } = await import('../data/sampleDecks')
+    expect(await seedSampleDecks(db)).toBe(3)
+    expect(await seedSampleDecks(db)).toBe(0)
+    const decks = await db.decks.toArray()
+    expect(decks.map((d) => d.sample).sort()).toEqual(['kosakata-inggris', 'rumus-matematika', 'twk-dasar'])
+    for (const sample of SAMPLE_DECKS) {
+      expect(sample.cards.length).toBeGreaterThanOrEqual(25)
+      const fronts = sample.cards.map(([f]) => f.toLowerCase())
+      expect(new Set(fronts).size).toBe(fronts.length)
+    }
+    expect(await db.cards.count()).toBe(SAMPLE_DECKS.reduce((n, d) => n + d.cards.length, 0))
+    expect((await getSettings(db)).seeded).toBe(true)
+  })
+
+  it('format teks deck contoh valid (tidak ada penanda yang tersisa)', async () => {
+    const { SAMPLE_DECKS } = await import('../data/sampleDecks')
+    const { toPlainText } = await import('../lib/richtext')
+    for (const d of SAMPLE_DECKS)
+      for (const [front, back] of d.cards) {
+        expect(toPlainText(front)).not.toMatch(/\*\*|\^|~/)
+        expect(toPlainText(back)).not.toMatch(/\*\*|\^|~/)
+      }
+  })
+})
