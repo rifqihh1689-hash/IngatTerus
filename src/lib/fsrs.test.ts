@@ -3,6 +3,10 @@ import { Rating, type Schedule } from '../types'
 import { DAY_MS, MINUTE_MS } from './date'
 import {
   DEFAULT_PARAMS,
+  DEFAULT_W,
+  fuzzInterval,
+  isValidWeights,
+  nextShortTermStability,
   forgettingCurve,
   formatInterval,
   initDifficulty,
@@ -69,9 +73,10 @@ describe('kurva lupa & interval', () => {
 })
 
 describe('kesulitan & stabilitas awal', () => {
-  it('stabilitas awal mengikuti parameter w0–w3', () => {
-    expect(initStability(Rating.Lupa)).toBeCloseTo(0.40255)
-    expect(initStability(Rating.Mudah)).toBeCloseTo(15.69105)
+  it('stabilitas awal mengikuti parameter w0–w3 (FSRS-6)', () => {
+    expect(DEFAULT_W).toHaveLength(21)
+    expect(initStability(Rating.Lupa)).toBeCloseTo(0.212)
+    expect(initStability(Rating.Mudah)).toBeCloseTo(8.2956)
   })
 
   it('kesulitan awal lebih tinggi untuk jawaban yang lebih buruk', () => {
@@ -126,8 +131,8 @@ describe('kartu baru', () => {
   it('Mudah → langsung lulus ke jadwal harian', () => {
     const next = schedule(card, Rating.Mudah, T0).card
     expect(next.state).toBe('review')
-    expect(next.scheduledDays).toBe(16) // round(S0(Mudah) = 15,69)
-    expect(next.due).toBe(T0 + 16 * DAY_MS)
+    expect(next.scheduledDays).toBe(8) // round(S0(Mudah) = 8,30)
+    expect(next.due).toBe(T0 + 8 * DAY_MS)
     expect(next.difficulty).toBeCloseTo(initDifficulty(Rating.Mudah))
   })
 
@@ -153,8 +158,8 @@ describe('kartu dalam langkah belajar', () => {
     expect(s2.state).toBe('review')
     expect(s2.scheduledDays).toBeGreaterThanOrEqual(1)
     expect(s2.due).toBe(t1 + s2.scheduledDays * DAY_MS)
-    // pengulangan di hari yang sama memakai stabilitas jangka pendek → naik
-    expect(s2.stability).toBeGreaterThan(s1.stability)
+    // pengulangan di hari yang sama memakai stabilitas jangka pendek → tidak turun bila Bisa
+    expect(s2.stability).toBeGreaterThanOrEqual(s1.stability)
   })
 
   it('Lupa di langkah belajar kembali ke langkah pertama', () => {
@@ -261,5 +266,74 @@ describe('retrievability & format', () => {
   it('parameter bawaan memakai langkah 1 & 10 menit', () => {
     expect(DEFAULT_PARAMS.learningSteps).toEqual([1, 10])
     expect(DEFAULT_PARAMS.relearningSteps).toEqual([10])
+  })
+})
+
+describe('FSRS-6: kurva lupa yang bisa dilatih & stabilitas jangka pendek', () => {
+  it('R(S, S) selalu 90% berapa pun kemiringan kurva (w20)', () => {
+    for (const decay of [0.1, 0.1542, 0.5, 0.8]) {
+      const w = [...DEFAULT_W]
+      w[20] = decay
+      expect(forgettingCurve(7, 7, w)).toBeCloseTo(0.9, 10)
+    }
+  })
+
+  it('w20 lebih besar → lupa lebih cepat setelah melewati S', () => {
+    const datar = [...DEFAULT_W]
+    datar[20] = 0.1
+    const curam = [...DEFAULT_W]
+    curam[20] = 0.8
+    expect(forgettingCurve(30, 5, curam)).toBeLessThan(forgettingCurve(30, 5, datar))
+  })
+
+  it('jawaban Bisa/Mudah di hari yang sama tidak menurunkan stabilitas', () => {
+    for (const s of [0.5, 2, 10, 80]) {
+      expect(nextShortTermStability(s, Rating.Bisa)).toBeGreaterThanOrEqual(s)
+      expect(nextShortTermStability(s, Rating.Mudah)).toBeGreaterThanOrEqual(s)
+      expect(nextShortTermStability(s, Rating.Lupa)).toBeLessThan(s)
+    }
+  })
+
+  it('validasi parameter: panjang 21 & di dalam batas', () => {
+    expect(isValidWeights([...DEFAULT_W])).toBe(true)
+    expect(isValidWeights(DEFAULT_W.slice(0, 19))).toBe(false)
+    expect(isValidWeights([...DEFAULT_W.slice(0, 20), 5])).toBe(false)
+    expect(isValidWeights('bukan array')).toBe(false)
+    // parameter tidak valid diganti bawaan
+    expect(makeParams({ w: [1, 2, 3] }).w).toBe(DEFAULT_W)
+  })
+})
+
+describe('fuzz interval', () => {
+  it('interval pendek (< 2,5 hari) tidak diacak', () => {
+    expect(fuzzInterval(1, 0, 'a', 36500)).toBe(1)
+    expect(fuzzInterval(2, 0, 'b', 36500)).toBe(2)
+  })
+
+  it('deterministik untuk seed yang sama dan tetap dalam rentang ±5–15%', () => {
+    expect(fuzzInterval(30, 10, 'kartu-1:3:3', 36500)).toBe(fuzzInterval(30, 10, 'kartu-1:3:3', 36500))
+    const values = new Set<number>()
+    for (let i = 0; i < 200; i++) {
+      const v = fuzzInterval(30, 10, `kartu-${i}`, 36500)
+      expect(v).toBeGreaterThanOrEqual(27)
+      expect(v).toBeLessThanOrEqual(33)
+      values.add(v)
+    }
+    expect(values.size).toBeGreaterThan(3) // benar-benar tersebar
+  })
+
+  it('tidak melewati interval maksimum', () => {
+    for (let i = 0; i < 50; i++) expect(fuzzInterval(400, 300, `x${i}`, 365)).toBeLessThanOrEqual(365)
+  })
+
+  it('pratinjau tombol sama dengan hasil sebenarnya & urutan interval tetap terjaga', () => {
+    const card = reviewCard({ stability: 25 }, 25)
+    for (let i = 0; i < 30; i++) {
+      const seed = `kartu-${i}`
+      const all = scheduleAll(card, T0, DEFAULT_PARAMS, seed)
+      expect(schedule(card, Rating.Bisa, T0, DEFAULT_PARAMS, seed).card).toEqual(all[Rating.Bisa])
+      expect(all[Rating.Sulit].scheduledDays).toBeLessThanOrEqual(all[Rating.Bisa].scheduledDays)
+      expect(all[Rating.Bisa].scheduledDays).toBeLessThan(all[Rating.Mudah].scheduledDays)
+    }
   })
 })
